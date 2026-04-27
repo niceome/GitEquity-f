@@ -16,5 +16,8 @@ export const sendContract = (contractId: number) =>
 export const signContract = (contractId: number) =>
   axiosInstance.post<ApiResponse<ContractDetail>>(`/contracts/${contractId}/sign`)
 
+export const deleteContract = (contractId: number) =>
+  axiosInstance.delete(`/contracts/${contractId}`)
+
 export const downloadPdf = (contractId: number) =>
   axiosInstance.get(`/contracts/${contractId}/pdf`, { responseType: 'blob' })

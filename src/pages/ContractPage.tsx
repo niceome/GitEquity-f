@@ -6,9 +6,10 @@ import Layout from '../components/Layout'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
-import { getContract, signContract, downloadPdf } from '../api/contracts'
+import { getContract, signContract, downloadPdf, deleteContract } from '../api/contracts'
 import type { MemberSignatureStatus } from '../types'
 import { useAuth } from '../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; className: string }> = {
@@ -96,11 +97,14 @@ function ProgressBar({ signed, total }: { signed: number; total: number }) {
 }
 
 export default function ContractPage() {
-  const { contractId } = useParams<{ id: string; contractId: string }>()
+  const { id, contractId } = useParams<{ id: string; contractId: string }>()
   const cid = Number(contractId)
+  const projectId = Number(id)
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -122,6 +126,16 @@ export default function ContractPage() {
     queryKey: ['contract', cid],
     queryFn: () => getContract(cid).then((r) => r.data.data),
     refetchInterval: (query) => query.state.data?.status === 'PENDING' ? 10000 : false,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteContract(cid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts', projectId] })
+      toast.success('계약이 삭제되었습니다.')
+      navigate(`/projects/${projectId}`)
+    },
+    onError: () => toast.error('계약 삭제에 실패했습니다.'),
   })
 
   const signMutation = useMutation({
@@ -185,7 +199,7 @@ export default function ContractPage() {
         </div>
 
         {/* 액션 버튼 */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           {canSign && (
             <Button className="flex-1" onClick={() => setConfirmOpen(true)}>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -219,8 +233,38 @@ export default function ContractPage() {
               {pdfLoading ? '로딩 중...' : '미리보기'}
             </button>
           )}
+          {contract.status !== 'COMPLETED' && (
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ml-auto"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              삭제
+            </button>
+          )}
         </div>
       </div>
+
+      {/* 삭제 확인 모달 */}
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="계약 삭제">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600">
+            계약 <span className="font-semibold">#{contract.id}</span>을 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDeleteOpen(false)}>취소</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              loading={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* 서명 확인 모달 */}
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="서명 확인">
